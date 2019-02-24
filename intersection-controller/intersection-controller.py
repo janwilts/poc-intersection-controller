@@ -1,26 +1,42 @@
 import sys
 import os
 from dotenv import load_dotenv
+
+from intersection.groups.cycle_group import CycleGroup
+from intersection.groups.mv_group import MotorVehicleGroup
+from intersection.groups.vessel_group import VesselGroup
 from mq.publisher import Publisher
 from mq.subscriber import Subscriber
 from intersection.intersection import Intersection
-from intersection.user_type import UserType
 
-GROUP_IDS = {
-    UserType.FOOT: [],
-    UserType.CYCLE: [1, 2],
-    UserType.MOTOR_VEHICLE: [1, 2, 3, 4, 5, 6, 7],
-    UserType.PUBLIC_SERVICE_VEHICLE: [],
-    UserType.VESSEL: [1],
-}
+GROUPS = [
+    CycleGroup(1),
+    CycleGroup(2),
+    MotorVehicleGroup(1),
+    MotorVehicleGroup(2),
+    MotorVehicleGroup(3),
+    MotorVehicleGroup(4),
+    MotorVehicleGroup(5),
+    MotorVehicleGroup(6),
+    MotorVehicleGroup(7),
+    VesselGroup(1)
+]
+
+PATTERN = [
+    [GROUPS[2], GROUPS[5], GROUPS[6]],
+    [GROUPS[8]],
+    [GROUPS[0], GROUPS[1], GROUPS[2], GROUPS[7]],
+    [GROUPS[8]],
+    [GROUPS[3], GROUPS[4]],
+    [GROUPS[8]],
+]
 
 
 def main(argv):
     # Load environment variables from .env file
     load_dotenv()
 
-    intersection = Intersection(GROUP_IDS)
-    print(intersection.light_topics)
+    intersection = Intersection(GROUPS, PATTERN)
 
     # Set up subscriber
     subscriber = Subscriber(os.getenv('SUBSCRIBER_ID'), os.getenv('SUBSCRIBER_HOST'), int(os.getenv('SUBSCRIBER_PORT')))
@@ -32,7 +48,18 @@ def main(argv):
     subscriber.connect()
     publisher.connect()
 
-    publisher.publish('test', 'test')
+    subscriber.on_connect = \
+        lambda: print(f'Connected to subscriber {subscriber.client_id} on {subscriber.host}:{subscriber.port}')
+    publisher.on_connect = \
+        lambda: print(f'Connected to publisher {publisher.client_id} on {publisher.host}:{publisher.port}')
+
+    for sensor_topic in intersection.sensor_topics:
+        subscriber.subscribe(sensor_topic)
+
+    subscriber.on_message = lambda message: intersection.message(message)
+    intersection.on_publish = lambda topic, payload: publisher.publish(topic, payload)
+
+    intersection.run()
 
 
 if __name__ == '__main__':

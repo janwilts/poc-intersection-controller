@@ -1,6 +1,6 @@
-from ..group import Group
-from ..user_type import UserType
+from intersection.groups.group import Group
+from intersection.groups.group_type import GroupType
 
 
 class MotorVehicleGroup(Group):
-    user_type = UserType.MOTOR_VEHICLE
+    group_type = GroupType.MOTOR_VEHICLE

@@ -1,5 +1,5 @@
-from .component import Component
-from .light_state import LightState
+from intersection.components.component import Component
+from intersection.components.light.light_state import LightState
 
 
 class Light(Component):

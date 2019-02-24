@@ -1,6 +1,6 @@
-from ..group import Group
-from ..user_type import UserType
+from intersection.groups.group import Group
+from intersection.groups.group_type import GroupType
 
 
 class VesselGroup(Group):
-    user_type = UserType.VESSEL
+    group_type = GroupType.VESSEL

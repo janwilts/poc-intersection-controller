@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class UserType(Enum):
+class GroupType(Enum):
     FOOT = 'foot'
     CYCLE = 'cycle'
     MOTOR_VEHICLE = 'motor_vehicle'

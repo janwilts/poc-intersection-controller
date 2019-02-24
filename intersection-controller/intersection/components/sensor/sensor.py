@@ -1,5 +1,5 @@
-from .component import Component
-from .sensor_state import SensorState
+from intersection.components.component import Component
+from intersection.components.sensor.sensor_state import SensorState
 
 
 class Sensor(Component):
