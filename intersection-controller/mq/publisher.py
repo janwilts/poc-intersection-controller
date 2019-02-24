@@ -1,4 +1,6 @@
-from .io import Io
+import logging
+
+from mq.io import Io
 
 
 class Publisher(Io):
@@ -11,4 +13,5 @@ class Publisher(Io):
         self.client.on_publish = self.on_publish
 
     def publish(self, topic: str, payload: any):
+        logging.debug(f'Publishing payload {payload} on topic {topic}.')
         self.client.publish(topic, payload)

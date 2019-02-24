@@ -1,3 +1,5 @@
+import logging
+
 from paho.mqtt.client import Client, MQTTMessage
 
 from mq.io import Io
@@ -13,7 +15,7 @@ class Subscriber(Io):
         self.on_message = None
 
         self.client.on_subscribe = self.on_subscribe
-        self.client.on_unsubscribe = self.on_unsubscribe
+        self.client.on_unsubscribe = self.on_subscribe
         self.client.on_message = self.client_on_message
 
     def subscribe(self, topic: str):
@@ -23,5 +25,6 @@ class Subscriber(Io):
         self.client.unsubscribe(topic)
 
     def client_on_message(self, client: Client, userdata: any, message: MQTTMessage):
+        logging.debug(f'Received payload {message.payload} on topic {message.topic}.')
         self.on_message(message)
 

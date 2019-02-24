@@ -1,3 +1,5 @@
+import logging
+
 import paho.mqtt.client as mqtt
 
 
@@ -24,10 +26,12 @@ class Io:
         self.client.disconnect()
 
     def on_client_connect(self):
+        logging.debug(f'Connected {self.client_id} on {self.host}:{self.port}')
         self.connected = True
         self.on_connect()
 
     def on_client_disconnect(self):
+        logging.debug(f'Disconnected {self.client_id} from {self.host}:{self.port}')
         self.connected = False
         self.on_disconnect()
 

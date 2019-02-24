@@ -3,4 +3,4 @@ from intersection.groups.group_type import GroupType
 
 
 class CycleGroup(Group):
-    group_type = GroupType.CYCLE
+    type = GroupType.CYCLE

@@ -1,4 +1,6 @@
 from typing import List
+
+from intersection.components.component import Component
 from intersection.components.light.light import Light
 from intersection.components.light.light_state import LightState
 from intersection.components.sensor.sensor import Sensor
@@ -6,31 +8,29 @@ from intersection.components.sensor.sensor_state import SensorState
 
 
 class Group:
-    group_type = None
+    type = None
 
-    def __init__(self, group_id: int, lights: List[Light] = None, sensors: List[Sensor] = None):
-        self.group_id = group_id
+    def __init__(self, id: int, components: List[Component] = None):
+        self.id = id
+        self.intersection = None
 
-        self.lights = []
-        self.sensors = []
-
-        if lights:
-            self.lights = lights
+        if components:
+            self.components = components
         else:
-            self.lights = [Light()]
+            self.components = [Light(), Sensor()]
 
-        if sensors:
-            self.sensors = sensors
-        else:
-            self.sensors = [Sensor()]
+        for component in self.components:
+            component.group = self
 
     def set_all_lights(self, state: LightState):
         for light in self.lights:
             light.state = state
+            yield light.topic
 
     def set_all_sensors(self, state: SensorState):
         for sensor in self.sensors:
             sensor.state = state
+            yield sensor.topic
 
     def one_sensor_high(self):
         for sensor in self.sensors:
@@ -38,3 +38,15 @@ class Group:
                 return True
 
         return False
+
+    @property
+    def lights(self):
+        return [component for component in self.components if isinstance(component, Light)]
+
+    @property
+    def sensors(self):
+        return [component for component in self.components if isinstance(component, Sensor)]
+
+    @property
+    def topic(self):
+        return f'{self.intersection.topic}/{self.type.value}/{self.id}'
