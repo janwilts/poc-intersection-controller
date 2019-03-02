@@ -1,6 +1,6 @@
-from enum import Enum
+from intersection.components.state import State
 
 
-class SensorState(Enum):
+class SensorState(State):
     HIGH = 1
     LOW = 0

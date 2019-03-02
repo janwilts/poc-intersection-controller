@@ -12,7 +12,7 @@ setup(
     author_email='jan@janwilts.com',
     url='https://github.com/janwilts/poc-intersection-controller',
     install_requires=[
-        'paho-mqtt',
+        'hbmqtt',
         'python-dotenv'
     ],
     packages=find_packages()

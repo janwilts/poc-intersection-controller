@@ -8,4 +8,4 @@ class Sensor(Component):
 
     def __init__(self, component_id=1):
         super().__init__(component_id)
-        self.state = SensorState.LOW
+        self._state = SensorState.LOW

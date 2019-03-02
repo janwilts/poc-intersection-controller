@@ -1,11 +1,8 @@
+import asyncio
 import logging
-import threading
 import time
-from typing import List
+from typing import List, Callable, Awaitable, Generator
 
-from paho.mqtt.client import MQTTMessage
-
-from intersection.components.component import Component
 from intersection.components.light.light_state import LightState
 from intersection.components.sensor.sensor import Sensor
 from intersection.components.sensor.sensor_state import SensorState
@@ -13,21 +10,32 @@ from intersection.groups.group import Group
 
 
 class Intersection:
-    def __init__(self, id: str, groups: List[Group], pattern: List[List[Group]]):
-        self.id = id
-        self.groups = groups
-        self.pattern = pattern
-        self.stop = False
+    """
+    Intersection class, represents one intersection that has its own groups and a pattern.
+    """
 
+    def __init__(self, id: str, groups: List[Group], pattern: List[List[Group]]) -> None:
+        """
+        Intersection constructor.
+
+        :param id: Unique ID of the intersection, first part of the topic.
+        :param groups: List of groups in this intersection.
+        :param pattern:
+        """
+
+        self.id: str = id
+        self.groups: List[Group] = groups
+        self.pattern: List[List[Group]] = pattern
+
+        # Dependency injection.
         for group in groups:
             group.intersection = self
 
-        self.on_publish = None
+        # Publish callback.
+        self.on_publish: Callable[[str, any], Awaitable[None]] = None
 
-        self.sensor_lock = threading.Lock()
-
-    def message(self, message: MQTTMessage):
-        component = self.get_component_from_topic(message.topic)
+    def parse_topic(self, topic: str) -> None:
+        component = self.get_component_from_topic(topic)
 
         if not component:
             return
@@ -35,27 +43,19 @@ class Intersection:
         if not isinstance(component, Sensor):
             return
 
-        self.sensor_lock.acquire()
         component.state = SensorState.HIGH
-        self.sensor_lock.release()
 
-    def init(self):
+    async def init(self):
         for group in self.groups:
             for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to STOP')
-
                 light.state = LightState.STOP
-                self.on_publish(light.topic, light.state.value)
+                await self.on_publish(light.topic, light.state.value)
 
-    def run(self):
-        while True:
-            if self.stop:
-                break
+    async def iterate_patterns(self):
+        for pattern in self.pattern:
+            await self.handle_pattern_part(pattern)
 
-            for pattern in self.pattern:
-                self.handle_pattern_part(pattern)
-
-    def handle_pattern_part(self, pattern: List[Group]):
+    async def handle_pattern_part(self, pattern: List[Group]):
         should_go = False
 
         for group in pattern:
@@ -67,33 +67,22 @@ class Intersection:
 
         for group in pattern:
             for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to GO')
-
                 light.state = LightState.GO
                 self.on_publish(light.topic, light.state.value)
 
-        time.sleep(10)
+        await asyncio.sleep(10)
 
         for group in pattern:
             for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to WAIT')
-
                 light.state = LightState.WAIT
                 self.on_publish(light.topic, light.state.value)
 
-        time.sleep(2)
+        await asyncio.sleep(2)
 
         for group in pattern:
-
-            logging.debug(f'Set all sensors in  {group.id} to LOW')
-
-            self.sensor_lock.acquire()
             group.set_all_sensors(SensorState.LOW)
-            self.sensor_lock.release()
 
             for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to STOP')
-
                 light.state = LightState.STOP
                 self.on_publish(light.topic, light.state.value)
 
@@ -105,33 +94,60 @@ class Intersection:
         if not group:
             return None
 
-        components: List[Component] = [group.components for cpt in group.components if cpt.type.value == topic_parts[3]]
+        type_components = []
+
+        for component in group.components:
+            if component.type.value == topic_parts[3]:
+                type_components.append(component)
+
+        id_components = []
 
         if topic_parts[4]:
-            components = [components for cpt in components if cpt.id == topic_parts[4]]
+            for component in type_components:
+                if component.id == int(topic_parts[4]):
+                    id_components.append(component)
 
-        if len(components) != 1:
+        if len(id_components) != 1:
             return None
 
-        return components[0]
+        return id_components[0]
 
     def get_group_from_topic(self, topic: str):
         topic_parts = topic.split('/')
 
-        groups: List[Group] = [self.groups for grp in self.groups if grp.type.value == topic_parts[1]]
-        groups: List[Group] = [groups for grp in groups if grp.id == topic_parts[2]]
+        type_groups = []
 
-        if len(groups) != 1:
+        for group in self.groups:
+            if group.type.value == topic_parts[1]:
+                type_groups.append(group)
+
+        id_groups = []
+
+        for group in type_groups:
+            if group.id == int(topic_parts[2]):
+                id_groups.append(group)
+
+        if len(id_groups) != 1:
             return None
 
-        return groups[0]
+        return id_groups[0]
 
     @property
     def sensor_topics(self):
+        """
+        Loops over all groups, and its sensors, returns their topics.
+
+        :return: All sensor topics belonging to this intersection.
+        """
+
         for group in self.groups:
             for sensor in group.sensors:
                 yield sensor.topic
 
     @property
     def topic(self):
+        """
+        :return: Intersection topic prefix.
+        """
+
         return self.id

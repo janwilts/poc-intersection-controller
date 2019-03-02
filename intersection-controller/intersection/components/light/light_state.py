@@ -1,7 +1,7 @@
-from enum import Enum
+from intersection.components.state import State
 
 
-class LightState(Enum):
+class LightState(State):
     # Green
     GO = 1
     # Orange

@@ -8,4 +8,4 @@ class Light(Component):
 
     def __init__(self, component_id=1):
         super().__init__(component_id)
-        self.state = LightState.STOP
+        self._state = LightState.STOP
