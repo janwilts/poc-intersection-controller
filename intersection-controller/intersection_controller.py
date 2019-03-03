@@ -6,7 +6,10 @@ from dotenv import load_dotenv
 from paho.mqtt.client import Client
 
 from controller import Controller
+from intersection.components.light.light import Light
+from intersection.components.sensor.sensor import Sensor
 from intersection.groups.cycle_group import CycleGroup
+from intersection.groups.foot_group import FootGroup
 from intersection.groups.mv_group import MotorVehicleGroup
 from intersection.groups.vessel_group import VesselGroup
 from intersection.intersection import Intersection
@@ -23,8 +26,8 @@ from intersection.intersection import Intersection
 #                                                         |   |   |      |
 #                                                         |   v   |      |
 #                                                         |       |      |
-#                                                    C1S1 |       |      |                  |  |   ~       |
-#                                                         | C1L1  |      |                  |  |           |
+#                                                  F1S1   | F1L1  |      |                  |  |   ~       |
+#                                                  C1S1   | C1L1  |      |                  |  |           |
 # ────────────────────────────────────────────────────────┘              |                  |  v ~      ~  |
 #                                                                         \                 |              |
 #    <──                                   MV3L1 MV3S1     <──             \                | V1S2  ~      |
@@ -37,17 +40,17 @@ from intersection.intersection import Intersection
 #
 #    ──┐     MV1S1 MV1L1                                                         ──>    MV1L1                        ──>
 #      v
-# ───────────────────┐       ┬ MV6L1 | MV5L1 ┌────────────┐       ┬ C2L1 ┌──────────────────┐         V1L1 ┌────────────
-#                    |       |               |            |       |      | C2S1             |   ~          |
-#                    |       | MV6S1 | MV5S1 |            |       |      |                  |         V1S1 |
+# ───────────────────┐       ┬ MV6L1 | MV5L1 ┌────────────┐       ┬ C1L2 ┌──────────────────┐         V1L1 ┌────────────
+#                    |       |               |            |       | F1L2 | C1S2             |   ~          |
+#                    |       | MV6S1 | MV5S1 |            |       |      | F1S2             |         V1S1 |
 #                    |       |               |            |       |      |                  |      ~      ~|
 #                    |   |   |  <┐   |   ┌>  |            |       |   ^  |                  |          ^   |
 #                    |   |   |   |       |   |            |       |   |  |                  |   ~      |   |
 #                    |   v   |   |   |   |   |            |       |   |  |                  |          |   |
 
 INTERSECTION_GROUPS = [
-    CycleGroup(1),
-    CycleGroup(2),
+    CycleGroup(1, [Light(1), Light(2), Sensor(1), Sensor(2)]),
+    FootGroup(1, [Light(1), Light(2), Sensor(1), Sensor(2)]),
     MotorVehicleGroup(1),
     MotorVehicleGroup(2),
     MotorVehicleGroup(3),
@@ -57,9 +60,9 @@ INTERSECTION_GROUPS = [
 ]
 
 INTERSECTION_PATTERN = [
-    [INTERSECTION_GROUPS[2], INTERSECTION_GROUPS[5], INTERSECTION_GROUPS[6]],
     [INTERSECTION_GROUPS[0], INTERSECTION_GROUPS[1], INTERSECTION_GROUPS[2], INTERSECTION_GROUPS[7]],
     [INTERSECTION_GROUPS[3], INTERSECTION_GROUPS[4]],
+    [INTERSECTION_GROUPS[4], INTERSECTION_GROUPS[5]],
 ]
 
 BRIDGE_GROUPS = [
