@@ -1,15 +1,12 @@
-import logging
 import threading
 import time
-from typing import List
+from typing import List, Generator
 
-from paho.mqtt.client import MQTTMessage
-
-from intersection.components.component import Component
 from intersection.components.light.light_state import LightState
 from intersection.components.sensor.sensor import Sensor
 from intersection.components.sensor.sensor_state import SensorState
 from intersection.groups.group import Group
+from topic_error import TopicError
 
 
 class Intersection:
@@ -26,34 +23,40 @@ class Intersection:
 
         self.sensor_lock = threading.Lock()
 
-    def message(self, message: MQTTMessage):
-        component = self.get_component_from_topic(message.topic)
-
-        if not component:
-            return
+    def on_message(self, parser, payload: bytes) -> None:
+        component = parser.component
 
         if not isinstance(component, Sensor):
-            return
+            raise TopicError('Found component is not a sensor')
 
         self.sensor_lock.acquire()
-        component.state = SensorState.HIGH
+
+        payload = int(payload)
+
+        if payload == SensorState.HIGH.value:
+            component.state = SensorState.HIGH
+        elif payload == SensorState.LOW.value:
+            component.state = SensorState.LOW
+
         self.sensor_lock.release()
 
     def init(self):
+        """
+        Set all lights to STOP.
+        """
+
         for group in self.groups:
             for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to STOP')
-
                 light.state = LightState.STOP
                 self.on_publish(light.topic, light.state.value)
 
-    def run(self):
-        while True:
-            if self.stop:
-                break
+    def iterate_patterns(self) -> None:
+        """
+        Loop over all pattern part in the patterns property.
+        """
 
-            for pattern in self.pattern:
-                self.handle_pattern_part(pattern)
+        for pattern in self.pattern:
+            self.handle_pattern_part(pattern)
 
     def handle_pattern_part(self, pattern: List[Group]):
         should_go = False
@@ -66,68 +69,32 @@ class Intersection:
             return
 
         for group in pattern:
-            for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to GO')
+            self.set_all_lights_in_group(group, LightState.GO)
 
-                light.state = LightState.GO
-                self.on_publish(light.topic, light.state.value)
-
-        time.sleep(10)
+        time.sleep(3)
 
         for group in pattern:
-            for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to WAIT')
+            self.set_all_lights_in_group(group, LightState.TRANSITIONING)
 
-                light.state = LightState.WAIT
-                self.on_publish(light.topic, light.state.value)
-
-        time.sleep(2)
+        time.sleep(1)
 
         for group in pattern:
+            # Turn off all sensors
+            for _ in group.set_all_sensors(SensorState.LOW):
+                pass
 
-            logging.debug(f'Set all sensors in  {group.id} to LOW')
+            # Red to all lights
+            self.set_all_lights_in_group(group, LightState.STOP)
 
-            self.sensor_lock.acquire()
-            group.set_all_sensors(SensorState.LOW)
-            self.sensor_lock.release()
+    def set_all_lights_in_group(self, group: Group, state: LightState) -> None:
+        if not group.one_sensor_high() and state == LightState.GO:
+            return
 
-            for light in group.lights:
-                logging.debug(f'Set light {group.id}:{light.id} to STOP')
-
-                light.state = LightState.STOP
-                self.on_publish(light.topic, light.state.value)
-
-    def get_component_from_topic(self, topic: str):
-        topic_parts = topic.split('/')
-
-        group = self.get_group_from_topic(topic)
-
-        if not group:
-            return None
-
-        components: List[Component] = [group.components for cpt in group.components if cpt.type.value == topic_parts[3]]
-
-        if topic_parts[4]:
-            components = [components for cpt in components if cpt.id == topic_parts[4]]
-
-        if len(components) != 1:
-            return None
-
-        return components[0]
-
-    def get_group_from_topic(self, topic: str):
-        topic_parts = topic.split('/')
-
-        groups: List[Group] = [self.groups for grp in self.groups if grp.type.value == topic_parts[1]]
-        groups: List[Group] = [groups for grp in groups if grp.id == topic_parts[2]]
-
-        if len(groups) != 1:
-            return None
-
-        return groups[0]
+        for topic, state in group.set_all_lights(state):
+            self.on_publish(topic, state.value)
 
     @property
-    def sensor_topics(self):
+    def sensor_topics(self) -> Generator:
         for group in self.groups:
             for sensor in group.sensors:
                 yield sensor.topic

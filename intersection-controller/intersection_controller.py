@@ -1,24 +1,49 @@
 import logging
-import signal
-import sys
 import os
-from typing import List
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from dotenv import load_dotenv
-from paho.mqtt.client import MQTTMessage
+from paho.mqtt.client import Client
 
+from controller import Controller
 from intersection.groups.cycle_group import CycleGroup
 from intersection.groups.mv_group import MotorVehicleGroup
 from intersection.groups.vessel_group import VesselGroup
-from intersection_thread import IntersectionThread
-from mq.publisher import Publisher
-from mq.subscriber import Subscriber
 from intersection.intersection import Intersection
 
-logging.basicConfig(level=logging.DEBUG, format='(%(threadName)-9s) %(message)s')
-
-subscriber: Subscriber = None
-publisher: Publisher = None
+# Schematic depiction of the intersections used in the proof of concept.
+#
+# MV = motor_vehicle
+# C = cycle
+# V = vessel
+#
+# L = light
+# S = sensor
+#                                                         |   |   |      |
+#                                                         |   |   |      |
+#                                                         |   v   |      |
+#                                                         |       |      |
+#                                                    C1S1 |       |      |                  |  |   ~       |
+#                                                         | C1L1  |      |                  |  |           |
+# ────────────────────────────────────────────────────────┘              |                  |  v ~      ~  |
+#                                                                         \                 |              |
+#    <──                                   MV3L1 MV3S1     <──             \                | V1S2  ~      |
+#                                                                           \               |  ~           |
+# ───────────────────┤                       ──  ──  ──  ──                  └──────────────┘ V1L2         └────────────
+#
+#    ──>     MV2S1 MV2L1                   MV4L1 MV4S1     ┌──                   <──                        MV1L2    <──
+#                                                          v
+#   ──  ──  ──  ──  ──                       ├────────────┤              ├──────────────────┤              ├────────────
+#
+#    ──┐     MV1S1 MV1L1                                                         ──>    MV1L1                        ──>
+#      v
+# ───────────────────┐       ┬ MV6L1 | MV5L1 ┌────────────┐       ┬ C2L1 ┌──────────────────┐         V1L1 ┌────────────
+#                    |       |               |            |       |      | C2S1             |   ~          |
+#                    |       | MV6S1 | MV5S1 |            |       |      |                  |         V1S1 |
+#                    |       |               |            |       |      |                  |      ~      ~|
+#                    |   |   |  <┐   |   ┌>  |            |       |   ^  |                  |          ^   |
+#                    |   |   |   |       |   |            |       |   |  |                  |   ~      |   |
+#                    |   v   |   |   |   |   |            |       |   |  |                  |          |   |
 
 INTERSECTION_GROUPS = [
     CycleGroup(1),
@@ -39,89 +64,61 @@ INTERSECTION_PATTERN = [
 
 BRIDGE_GROUPS = [
     MotorVehicleGroup(1),
-    VesselGroup(1)
+    VesselGroup(1),
 ]
 
 BRIDGE_PATTERN = [
-    [BRIDGE_GROUPS[1]]
+    [BRIDGE_GROUPS[1]],
 ]
 
 INTERSECTIONS = [
     Intersection('intersection', INTERSECTION_GROUPS, INTERSECTION_PATTERN),
-    Intersection('bridge', BRIDGE_GROUPS, BRIDGE_PATTERN)
-]
-
-THREADS = [
-    IntersectionThread(INTERSECTIONS[0]),
-    IntersectionThread(INTERSECTIONS[1])
+    Intersection('bridge', BRIDGE_GROUPS, BRIDGE_PATTERN),
 ]
 
 
-def on_sigint(signum, frame):
-    logging.debug('Received signal SIGINT')
+def main() -> None:
+    """
+    Intersection controller main function.
+    """
 
-    for ints in INTERSECTIONS:
-        ints.stop = True
+    logging_formatter = '[%(asctime)s] [%(levelname)s] %(message)s'
+    logging.basicConfig(level=logging.DEBUG, format=logging_formatter)
 
-        for topic in ints.sensor_topics:
-            subscriber.unsubscribe(topic)
-
-    logging.debug('Disconnecting subscriber and publisher.')
-
-    subscriber.disconnect()
-    publisher.disconnect()
-
-    for thread in THREADS:
-        thread.join()
-
-
-def on_message(message: MQTTMessage):
-    logging.debug(f'Received message {message.payload} on {message.topic}')
-
-    topic_parts = message.topic.split('/')
-
-    intersections: List[Intersection] = [INTERSECTIONS for ints in INTERSECTIONS if ints.id == topic_parts[0]]
-
-    for ints in intersections:
-        ints.message(message)
-
-
-def main(argv):
     # Load environment variables from .env file
     load_dotenv()
 
-    global subscriber
-    global publisher
+    # Set up subscriber / publisher
+    subscriber = Client(os.getenv('SUBSCRIBER_ID'))
+    publisher = Client(os.getenv('PUBLISHER_ID'))
 
-    # Set up subscriber
-    subscriber = Subscriber(os.getenv('SUBSCRIBER_ID'), os.getenv('SUBSCRIBER_HOST'), int(os.getenv('SUBSCRIBER_PORT')))
+    # Enable MQTT logging
+    subscriber.enable_logger()
+    publisher.enable_logger()
 
-    # Set up publisher
-    publisher = Publisher(os.getenv('PUBLISHER_ID'), os.getenv('PUBLISHER_HOST'), int(os.getenv('PUBLISHER_PORT')))
+    # Connect subscriber and publisher
+    subscriber.connect(os.getenv('SUBSCRIBER_HOST'), int(os.getenv('SUBSCRIBER_PORT')))
+    publisher.connect(os.getenv('PUBLISHER_HOST'), int(os.getenv('PUBLISHER_PORT')))
 
-    logging.info('Connecting subscriber and publisher.')
+    qos = int(os.getenv('QUALITY_OF_SERVICE'))
 
-    subscriber.connect()
-    publisher.connect()
+    executor = ThreadPoolExecutor(3)
 
-    signal.signal(signal.SIGINT, on_sigint)
-    signal.signal(signal.SIGTERM, on_sigint)
+    # Create a controller object.
+    controller = Controller(INTERSECTIONS, subscriber, publisher, qos)
+    controller.init()
 
-    for intersection in INTERSECTIONS:
-        intersection.on_publish = lambda topic, payload: publisher.publish(topic, payload)
+    executor.submit(controller_start, controller)
+    executor.submit(controller_run_intersections, controller)
 
-        for sensor_topic in intersection.sensor_topics:
-            logging.info(f'Subscribing on: {sensor_topic}')
-            subscriber.subscribe(sensor_topic)
 
-    subscriber.on_message = on_message
+def controller_start(controller: Controller) -> None:
+    controller.start()
 
-    for intersection in INTERSECTIONS:
-        intersection.init()
 
-    for thread in THREADS:
-        thread.start()
+def controller_run_intersections(controller: Controller) -> None:
+    controller.run_intersections()
 
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()

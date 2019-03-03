@@ -24,13 +24,20 @@ class Group:
 
     def set_all_lights(self, state: LightState):
         for light in self.lights:
+            prev_state = light.state
+
             light.state = state
-            yield light.topic
+
+            if prev_state != light.state:
+                yield light.topic, light.state
 
     def set_all_sensors(self, state: SensorState):
         for sensor in self.sensors:
+            prev_state = sensor.state
             sensor.state = state
-            yield sensor.topic
+
+            if prev_state != sensor.state:
+                yield sensor.topic, sensor.state
 
     def one_sensor_high(self):
         for sensor in self.sensors:

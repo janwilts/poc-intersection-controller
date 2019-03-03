@@ -1,14 +1,23 @@
+import logging
+
+from intersection.components.component_state import ComponentState
+
+
 class Component:
+    """
+    Component base class.
+    """
+
     type = None
 
-    def __init__(self, id=1):
-        self.id = id
-        self.group = None
+    def __init__(self, id: int = 1) -> None:
+        self.id: int = id
 
-        self.state = None
+        self.group = None
+        self._state: ComponentState = None
 
     @property
-    def topic(self):
+    def topic(self) -> str:
         base_topic = f'{self.group.topic}/{self.type.value}'
 
         if self.id:
