@@ -29,14 +29,7 @@ class Light(Component):
 
     @state.setter
     def state(self, state: LightState):
-        allowed_order = LightState.ALLOWED_ORDER.value
-
-        if state == LightState.GO:
-            self._state = state
-        elif allowed_order[allowed_order.index(state.value) - 1] == self.state.value:
-            self._state = state
-        else:
-            return
+        self._state = state
 
         logging.debug(f'Set component {self.topic} to {state}')
 

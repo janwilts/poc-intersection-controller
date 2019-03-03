@@ -71,12 +71,12 @@ class Intersection:
         for group in pattern:
             self.set_all_lights_in_group(group, LightState.GO)
 
-        time.sleep(3)
+        time.sleep(max([group.go_time for group in pattern]))
 
         for group in pattern:
             self.set_all_lights_in_group(group, LightState.TRANSITIONING)
 
-        time.sleep(1)
+        time.sleep(max([group.transition_time for group in pattern]))
 
         for group in pattern:
             # Turn off all sensors
@@ -86,10 +86,9 @@ class Intersection:
             # Red to all lights
             self.set_all_lights_in_group(group, LightState.STOP)
 
-    def set_all_lights_in_group(self, group: Group, state: LightState) -> None:
-        if not group.one_sensor_high() and state == LightState.GO:
-            return
+        time.sleep(max([group.go_time for group in pattern]) / 2)
 
+    def set_all_lights_in_group(self, group: Group, state: LightState) -> None:
         for topic, state in group.set_all_lights(state):
             self.on_publish(topic, state.value)
 
