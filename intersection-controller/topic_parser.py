@@ -29,6 +29,8 @@ class TopicParser:
         self.group: Group = None
         self.component: Component = None
 
+        self.timescale: True = None
+
     def fill_all(self) -> TopicParser:
         """
         Fills all properties.
@@ -36,7 +38,10 @@ class TopicParser:
         :return: Instance for chaining.
         """
 
-        return self.fill_intersection().fill_group().fill_component()
+        if self.is_features:
+            return self.fill_intersection().fill_feature()
+        else:
+            return self.fill_intersection().fill_group().fill_component()
 
     def fill_intersection(self) -> TopicParser:
         """
@@ -103,6 +108,26 @@ class TopicParser:
         self.component = component
         return self
 
+    def fill_feature(self) -> TopicParser:
+        if not self.topic_features:
+            raise TopicError('Topic is not a features topic.')
+
+        if not self.topic_feature:
+            raise TopicError('No feature has been defined')
+
+        if self.topic_feature == 'timescale':
+            self.timescale = True
+
+        return self
+
+    @property
+    def is_features(self) -> bool:
+        """
+        When the incoming topic is a features topic, return true
+        """
+
+        return self.topic_features == 'features'
+
     # Topic part alias getters.
 
     @property
@@ -124,3 +149,11 @@ class TopicParser:
     @property
     def topic_component_id(self) -> str:
         return self.topic_parts[4]
+
+    @property
+    def topic_features(self) -> str:
+        return self.topic_parts[1]
+
+    @property
+    def topic_feature(self):
+        return self.topic_parts[2]

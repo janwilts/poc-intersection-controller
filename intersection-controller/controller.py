@@ -40,6 +40,7 @@ class Controller:
         for intersection in self.intersections:
             # Subscribe on all sensor topics in a intersection
             self.subscriber.subscribe([(topic, self.qos) for topic in intersection.sensor_topics])
+            self.subscriber.subscribe(f'{intersection.id}/features/timescale')
 
             # Intersection publish handler
             intersection.on_publish = self.on_publish
@@ -69,7 +70,12 @@ class Controller:
         """
 
         parser = TopicParser(self.intersections, message.topic).fill_all()
-        parser.intersection.on_message(parser, message.payload)
+
+        if parser.is_features:
+            if parser.timescale:
+                parser.intersection.timescale = float(message.payload)
+        else:
+            parser.intersection.on_message(parser, message.payload)
 
     def on_publish(self, topic: str, payload: any = None) -> None:
         """

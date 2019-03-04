@@ -17,6 +17,7 @@ from intersection.intersection import Intersection
 # Schematic depiction of the intersections used in the proof of concept.
 #
 # MV = motor_vehicle
+# F = foot
 # C = cycle
 # V = vessel
 #
@@ -105,14 +106,13 @@ def main() -> None:
 
     qos = int(os.getenv('QUALITY_OF_SERVICE'))
 
-    executor = ThreadPoolExecutor(3)
-
     # Create a controller object.
     controller = Controller(INTERSECTIONS, subscriber, publisher, qos)
     controller.init()
 
-    executor.submit(controller_start, controller)
-    executor.submit(controller_run_intersections, controller)
+    with ThreadPoolExecutor(2) as executor:
+        executor.submit(controller_start, controller),
+        executor.submit(controller_run_intersections, controller)
 
 
 def controller_start(controller: Controller) -> None:
