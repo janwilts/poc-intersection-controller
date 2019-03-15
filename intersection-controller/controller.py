@@ -40,7 +40,7 @@ class Controller:
         for intersection in self.intersections:
             # Subscribe on all sensor topics in a intersection
             self.subscriber.subscribe([(topic, self.qos) for topic in intersection.sensor_topics])
-            self.subscriber.subscribe(f'{intersection.id}/features/timescale')
+            self.subscriber.subscribe(f'{intersection.topic}/features/timescale')
 
             # Intersection publish handler
             intersection.on_publish = self.on_publish

@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from concurrent.futures.thread import ThreadPoolExecutor
 
 from dotenv import load_dotenv
@@ -24,8 +25,6 @@ from intersection.intersection import Intersection
 # L = light
 # S = sensor
 #                                                         |   |   |      |
-#                                                         |   |   |      |
-#                                                         |   v   |      |
 #                                                         |       |      |
 #                                                  F1S1   | F1L1  |      |                  |  |   ~       |
 #                                                  C1S1   | C1L1  |      |                  |  |           |
@@ -33,7 +32,9 @@ from intersection.intersection import Intersection
 #                                                                         \                 |              |
 #    <──                                   MV3L1 MV3S1     <──             \                | V1S2  ~      |
 #                                                                           \               |  ~           |
-# ───────────────────┤                       ──  ──  ──  ──                  └──────────────┘ V1L2         └────────────
+# ───────────────────┤                       ──  ──  ──  ──                  └────────
+#                                                         |   |   |      |
+#                                                         |   v   |      |──────┘ V1L2         └────────────
 #
 #    ──>     MV2S1 MV2L1                   MV4L1 MV4S1     ┌──                   <──                        MV1L2    <──
 #                                                          v
@@ -75,12 +76,6 @@ BRIDGE_PATTERN = [
     [BRIDGE_GROUPS[1]],
 ]
 
-INTERSECTIONS = [
-    Intersection('intersection', INTERSECTION_GROUPS, INTERSECTION_PATTERN),
-    Intersection('bridge', BRIDGE_GROUPS, BRIDGE_PATTERN),
-]
-
-
 def main() -> None:
     """
     Intersection controller main function.
@@ -91,6 +86,8 @@ def main() -> None:
 
     # Load environment variables from .env file
     load_dotenv()
+
+    intersection = Intersection(os.getenv('TEAM_ID'), INTERSECTION_GROUPS, INTERSECTION_PATTERN)
 
     # Set up subscriber / publisher
     subscriber = Client(os.getenv('SUBSCRIBER_ID'))
@@ -107,7 +104,7 @@ def main() -> None:
     qos = int(os.getenv('QUALITY_OF_SERVICE'))
 
     # Create a controller object.
-    controller = Controller(INTERSECTIONS, subscriber, publisher, qos)
+    controller = Controller([intersection], subscriber, publisher, qos)
     controller.init()
 
     with ThreadPoolExecutor(2) as executor:
@@ -121,6 +118,7 @@ def controller_start(controller: Controller) -> None:
 
 def controller_run_intersections(controller: Controller) -> None:
     controller.run_intersections()
+    time.sleep(1)
 
 
 if __name__ == '__main__':
